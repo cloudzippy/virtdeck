@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    environment:
+      VIRTDECK_LIBVIRT_URI: qemu:///system
+      VIRTDECK_DATABASE_URL: postgresql+psycopg://virtdeck:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/virtdeck
+      VIRTDECK_SECRET_KEY: ${VIRTDECK_SECRET_KEY:?set VIRTDECK_SECRET_KEY}
+      VIRTDECK_STORAGE_ROOT: /var/lib/libvirt/images
+    volumes:
+      # The backend talks to the HOST's libvirt daemon over its Unix socket,
+      # not a libvirtd running inside the container.
+      - /var/run/libvirt:/var/run/libvirt
+      - /var/lib/libvirt/images:/var/lib/libvirt/images
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: virtdeck
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: virtdeck
+    volumes:
+      - virtdeck-db:/var/lib/postgresql/data
+
+volumes:
+  virtdeck-db:
