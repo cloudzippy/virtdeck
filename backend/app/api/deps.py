@@ -7,16 +7,15 @@ from fastapi.security import OAuth2PasswordBearer
 from app.core.db import get_db
 from app.core.security import decode_access_token
 from app.models.user import Role
+from app.services.authz import Actor
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 __all__ = ["get_db", "get_current_user", "require_role", "CurrentUser"]
 
 
-class CurrentUser:
-    def __init__(self, id: str, role: Role) -> None:
-        self.id = id
-        self.role = role
+# Services take the same type, so routers can pass the current user straight through.
+CurrentUser = Actor
 
 
 def get_current_user(token: str | None = Depends(oauth2_scheme)) -> CurrentUser:

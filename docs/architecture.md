@@ -21,6 +21,17 @@ Blocking libvirt calls are run off the event loop via `asyncio.to_thread` in the
 - JWT access tokens (`core/security.py`), Argon2 password hashing.
 - Three roles: `admin`, `operator`, `viewer`. `viewer` can read VM state; `operator` and `admin` can start/stop/reboot/pause/resume; only `admin` can delete (undefine) a VM. Enforced via the `require_role(...)` dependency in `api/deps.py`.
 
+Access to a VM is decided by two checks, and both must pass:
+
+1. **Role** (`require_role` in `api/deps.py`): what kind of action the user may take, as above.
+2. **Ownership** (`services/authz.py`): which VMs the user may see or act on. Each VM has at most one owner, recorded in the `vm_ownership` table by libvirt UUID.
+   - `admin` sees and acts on every VM, including unassigned ones.
+   - `operator` and `viewer` see only the VMs they own. A viewer who owns a VM still can't operate it.
+   - A VM the user may not see returns `404`, the same as a VM that doesn't exist, so its existence isn't disclosed.
+   - VMs with no owner (for example, defined with `virsh` or before VirtDeck was installed) are visible only to admins, with `owner_id: null`, until an admin assigns an owner.
+   - Only admins can set or clear an owner, with `PUT /api/vms/{uuid}/owner` and a body of `{"owner_id": "<user id>"}` or `{"owner_id": null}`. The owner must be an active user. Every change is audit-logged as `vm.assign_owner`.
+   - Deleting a VM through VirtDeck also deletes its ownership row. There's no sharing yet: a VM can't be granted to users other than its owner.
+
 ## VM lifecycle semantics
 
 Lifecycle endpoints under `/api/vms/{uuid}` take the VM's libvirt UUID; anything that isn't a valid UUID is rejected with `422` before libvirt is called. Every lifecycle call returns the VM's resulting state, and repeating a call is safe:

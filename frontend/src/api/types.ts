@@ -15,6 +15,8 @@ export interface VMSummary {
   vcpus: number;
   memory_kib: number;
   persistent: boolean;
+  /** `null` means unassigned: only admins can see the VM until an owner is set. */
+  owner_id: string | null;
 }
 
 export interface TokenResponse {
