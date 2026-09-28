@@ -35,7 +35,7 @@ Known gaps against AGENTS.md, fixed in phase 0:
 |---|---|---|
 | 0.1 | `docs: add stack rationale and roadmap` | Add `stack.md` and this roadmap. Update `architecture.md` so it agrees with `stack.md`: libvirt stays the source of truth for runtime state, and the database holds data VirtDeck owns, such as VM ownership and spec. |
 | 0.2 | `fix: validate VM UUIDs and make reboot idempotent` | Change the path parameter to the `uuid.UUID` type. Reboot on a shut-off VM returns its state. Add pause and resume. Include regression tests. |
-| 0.3 | `feat: VM ownership and per-VM authorization` | Add a `vm_ownership` table and migration. Services check ownership through one shared helper. Filter list results to what the user may see. |
+| 0.3 | `feat: VM ownership and per-VM authorization` | Add a `vm_ownership` table and migration. Services check ownership through one shared helper. Filter list results to what the user may see. Add an admin-only `PUT /api/vms/{uuid}/owner`. See [VM ownership decisions](#vm-ownership-decided-2026-09-28-for-03). |
 | 0.4 | `fix: audit failed actions, refuse insecure secret in prod` | Record failed attempts in the audit log with an outcome field (needs a migration). Add `VIRTDECK_ENV`. Refuse to start when it is `prod` and the default secret is still set. |
 | 0.5 | `feat: refresh-token rotation` | Add a `refresh_tokens` table. Issue a rotating refresh token in an HTTP-only, `SameSite=Strict` cookie. Add `/api/auth/refresh` and `/api/auth/logout`. The frontend keeps the access token in memory only. |
 
@@ -67,13 +67,24 @@ Known gaps against AGENTS.md, fixed in phase 0:
 
 Later: a Tauri desktop app that wraps the same frontend build (see `architecture.md`).
 
-## Open decisions
+## Decisions
 
-These affect security-sensitive behavior and need an answer before the related work starts.
+Answers to the security-sensitive questions that blocked roadmap items.
+
+### VM ownership (decided 2026-09-28, for 0.3)
+
+| Question | Decision |
+|---|---|
+| Who can see and control a VM? | Owner-based. Admins see and act on every VM. Operators and viewers see only the VMs they own, and their role still limits what they can do (a viewer who owns a VM can't operate it). A VM the user may not see returns `404`, the same as a missing VM. |
+| VMs defined outside VirtDeck (for example with `virsh`) | Unassigned. Visible only to admins until an admin assigns an owner. |
+| Sharing a VM with users other than its owner | Not in 0.3. Each VM has at most one owner. Per-VM grants or groups can be added later without changing this model. |
+| Who can assign or change an owner? | Admins only, and every change is audit-logged. |
+
+### Open
+
+These still need an answer before the related work starts.
 
 | Decision | Blocks |
 |---|---|
-| Ownership rules: do admins see every VM? Can operators act on VMs they don't own? Is group ownership needed? | 0.3 |
-| VMs defined outside VirtDeck: hide them until an admin claims them, or assign them to admins by default? | 0.3 |
 | Image allow-list: a `VIRTDECK_IMAGE_URL_ALLOWLIST` variable or an admin-managed database table? | 1.5 |
 | Backup destination: a local directory under the storage root, or remote storage (S3 or similar), which adds a dependency? | 2.6 |
