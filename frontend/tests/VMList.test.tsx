@@ -11,6 +11,7 @@ const SAMPLE: VMSummary = {
   vcpus: 2,
   memory_kib: 2097152,
   persistent: true,
+  owner_id: null,
 };
 
 describe("VMList", () => {

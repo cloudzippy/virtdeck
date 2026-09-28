@@ -18,3 +18,7 @@ class VMOperationError(ServiceError):
 
 class VMStateConflictError(ServiceError):
     """The requested operation is not valid for the VM's current state."""
+
+
+class InvalidOwnerError(ServiceError):
+    """The requested VM owner does not exist or is inactive."""

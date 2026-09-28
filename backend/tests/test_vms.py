@@ -10,6 +10,7 @@ from app.libvirt.domains import DomainState, DomainSummary
 from app.libvirt.exceptions import DomainNotFoundError, InvalidDomainStateError
 from app.models.audit_log import AuditLog
 from app.models.user import Role, User
+from app.models.vm_ownership import VMOwnership
 from tests.conftest import get_token
 
 SAMPLE = DomainSummary(
@@ -22,15 +23,24 @@ SAMPLE = DomainSummary(
 )
 
 
+def _own(db: Session, owner: User, vm_uuid: str = SAMPLE.uuid) -> None:
+    db.add(VMOwnership(vm_uuid=vm_uuid, owner_id=owner.id, assigned_by=owner.id))
+    db.commit()
+
+
 def test_list_vms_requires_auth(client: TestClient) -> None:
     resp = client.get("/api/vms")
     assert resp.status_code == 401
 
 
 def test_list_vms(
-    client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
 ) -> None:
-    make_user(email="viewer@example.com", password="viewer-pass", role=Role.VIEWER)
+    user = make_user(email="viewer@example.com", password="viewer-pass", role=Role.VIEWER)
+    _own(db_session, user)
     monkeypatch.setattr("app.libvirt.domains.list_domains", lambda: [SAMPLE])
 
     token = get_token(client, "viewer@example.com", "viewer-pass")
@@ -45,6 +55,7 @@ def test_list_vms(
             "vcpus": 2,
             "memory_kib": 1048576,
             "persistent": True,
+            "owner_id": user.id,
         }
     ]
 
@@ -64,9 +75,13 @@ def test_viewer_cannot_start_vm(
 
 
 def test_operator_can_start_vm(
-    client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
 ) -> None:
-    make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    user = make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    _own(db_session, user)
     started = replace(SAMPLE, state=DomainState.RUNNING)
     monkeypatch.setattr("app.libvirt.domains.start_domain", lambda uuid: started)
 
@@ -80,9 +95,13 @@ def test_operator_can_start_vm(
 
 
 def test_start_vm_not_found(
-    client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
 ) -> None:
-    make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    user = make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    _own(db_session, user)
 
     def _raise(uuid: str) -> DomainSummary:
         raise DomainNotFoundError(uuid)
@@ -130,9 +149,13 @@ def test_invalid_vm_uuid_is_rejected_before_libvirt(
 
 
 def test_vm_uuid_is_normalised_to_lowercase(
-    client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
 ) -> None:
-    make_user(email="viewer@example.com", password="viewer-pass", role=Role.VIEWER)
+    user = make_user(email="viewer@example.com", password="viewer-pass", role=Role.VIEWER)
+    _own(db_session, user)
     seen: list[str] = []
 
     def _get(uuid: str) -> DomainSummary:
@@ -151,9 +174,13 @@ def test_vm_uuid_is_normalised_to_lowercase(
 
 
 def test_reboot_shutoff_vm_returns_state(
-    client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
 ) -> None:
-    make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    user = make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    _own(db_session, user)
     monkeypatch.setattr("app.libvirt.domains.reboot_domain", lambda uuid: SAMPLE)
 
     token = get_token(client, "op@example.com", "operator-pass")
@@ -192,6 +219,7 @@ def test_operator_can_pause_and_resume_vm(
     result_state: DomainState,
 ) -> None:
     user = make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    _own(db_session, user)
     monkeypatch.setattr(
         f"app.libvirt.domains.{action}_domain", lambda uuid: replace(SAMPLE, state=result_state)
     )
@@ -212,9 +240,11 @@ def test_pause_or_resume_shutoff_vm_is_conflict(
     client: TestClient,
     make_user: Callable[..., User],
     monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
     action: str,
 ) -> None:
-    make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    user = make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    _own(db_session, user)
 
     def _raise(uuid: str) -> DomainSummary:
         raise InvalidDomainStateError(uuid, DomainState.SHUTOFF, action)
@@ -231,9 +261,13 @@ def test_pause_or_resume_shutoff_vm_is_conflict(
 
 
 def test_resume_vm_not_found(
-    client: TestClient, make_user: Callable[..., User], monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    make_user: Callable[..., User],
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
 ) -> None:
-    make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    user = make_user(email="op@example.com", password="operator-pass", role=Role.OPERATOR)
+    _own(db_session, user)
 
     def _raise(uuid: str) -> DomainSummary:
         raise DomainNotFoundError(uuid)
