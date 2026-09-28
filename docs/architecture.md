@@ -19,7 +19,20 @@ Blocking libvirt calls are run off the event loop via `asyncio.to_thread` in the
 ## Auth and RBAC
 
 - JWT access tokens (`core/security.py`), Argon2 password hashing.
-- Three roles: `admin`, `operator`, `viewer`. `viewer` can read VM state; `operator` and `admin` can start/stop/reboot; only `admin` can delete (undefine) a VM. Enforced via the `require_role(...)` dependency in `api/deps.py`.
+- Three roles: `admin`, `operator`, `viewer`. `viewer` can read VM state; `operator` and `admin` can start/stop/reboot/pause/resume; only `admin` can delete (undefine) a VM. Enforced via the `require_role(...)` dependency in `api/deps.py`.
+
+## VM lifecycle semantics
+
+Lifecycle endpoints under `/api/vms/{uuid}` take the VM's libvirt UUID; anything that isn't a valid UUID is rejected with `422` before libvirt is called. Every lifecycle call returns the VM's resulting state, and repeating a call is safe:
+
+| Endpoint | Already in target state | Invalid for current state |
+|---|---|---|
+| `POST start` | running: returns state | — |
+| `POST shutdown`, `POST force-stop` | shut off: returns state | — |
+| `POST reboot` | shut off: returns state (nothing to reboot) | — |
+| `POST pause` | paused: returns state | not running (e.g. shut off): `409` |
+| `POST resume` | running: returns state | not paused or running (e.g. shut off): `409` |
+| `DELETE` | already gone: `204` | — |
 
 ## Desktop app (planned)
 

@@ -14,3 +14,7 @@ class VMNotFoundError(ServiceError):
 
 class VMOperationError(ServiceError):
     pass
+
+
+class VMStateConflictError(ServiceError):
+    """The requested operation is not valid for the VM's current state."""
