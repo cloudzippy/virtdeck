@@ -4,9 +4,13 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.libvirt import domains as libvirt_domains
-from app.libvirt.exceptions import DomainNotFoundError, LibvirtLayerError
+from app.libvirt.exceptions import (
+    DomainNotFoundError,
+    InvalidDomainStateError,
+    LibvirtLayerError,
+)
 from app.models.audit_log import AuditLog
-from app.services.exceptions import VMNotFoundError, VMOperationError
+from app.services.exceptions import VMNotFoundError, VMOperationError, VMStateConflictError
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +79,32 @@ async def reboot_vm(db: Session, user_id: str, uuid: str) -> libvirt_domains.Dom
     except LibvirtLayerError as exc:
         raise VMOperationError(str(exc)) from exc
     _audit(db, user_id, "vm.reboot", uuid)
+    return summary
+
+
+async def pause_vm(db: Session, user_id: str, uuid: str) -> libvirt_domains.DomainSummary:
+    try:
+        summary = await asyncio.to_thread(libvirt_domains.pause_domain, uuid)
+    except DomainNotFoundError as exc:
+        raise VMNotFoundError(uuid) from exc
+    except InvalidDomainStateError as exc:
+        raise VMStateConflictError(str(exc)) from exc
+    except LibvirtLayerError as exc:
+        raise VMOperationError(str(exc)) from exc
+    _audit(db, user_id, "vm.pause", uuid)
+    return summary
+
+
+async def resume_vm(db: Session, user_id: str, uuid: str) -> libvirt_domains.DomainSummary:
+    try:
+        summary = await asyncio.to_thread(libvirt_domains.resume_domain, uuid)
+    except DomainNotFoundError as exc:
+        raise VMNotFoundError(uuid) from exc
+    except InvalidDomainStateError as exc:
+        raise VMStateConflictError(str(exc)) from exc
+    except LibvirtLayerError as exc:
+        raise VMOperationError(str(exc)) from exc
+    _audit(db, user_id, "vm.resume", uuid)
     return summary
 
 

@@ -6,7 +6,11 @@ from dataclasses import dataclass
 import libvirt
 
 from app.libvirt.connection import get_connection
-from app.libvirt.exceptions import DomainNotFoundError, LibvirtLayerError
+from app.libvirt.exceptions import (
+    DomainNotFoundError,
+    InvalidDomainStateError,
+    LibvirtLayerError,
+)
 
 _STATE_MAP = {
     libvirt.VIR_DOMAIN_NOSTATE: "unknown",
@@ -29,6 +33,10 @@ class DomainState(enum.StrEnum):
     SHUTOFF = "shutoff"
     CRASHED = "crashed"
     SUSPENDED = "suspended"
+
+
+# "blocked" means running but waiting on I/O, so libvirt treats it like running.
+_PAUSABLE_STATES = frozenset({DomainState.RUNNING, DomainState.BLOCKED})
 
 
 @dataclass(frozen=True)
@@ -122,11 +130,45 @@ def force_stop_domain(uuid: str) -> DomainSummary:
 
 
 def reboot_domain(uuid: str) -> DomainSummary:
+    """Request a guest reboot. A shut-off domain has nothing to reboot, so its state is returned."""
     domain = _lookup(uuid)
+    summary = _summarize(domain)
+    if summary.state == DomainState.SHUTOFF:
+        return summary
     try:
         domain.reboot()
     except libvirt.libvirtError as exc:
         raise LibvirtLayerError(f"failed to reboot domain {uuid}: {exc}") from exc
+    return _summarize(domain)
+
+
+def pause_domain(uuid: str) -> DomainSummary:
+    """Suspend a running domain's vCPUs. Idempotent: already-paused is not an error."""
+    domain = _lookup(uuid)
+    summary = _summarize(domain)
+    if summary.state == DomainState.PAUSED:
+        return summary
+    if summary.state not in _PAUSABLE_STATES:
+        raise InvalidDomainStateError(uuid, summary.state, "pause")
+    try:
+        domain.suspend()
+    except libvirt.libvirtError as exc:
+        raise LibvirtLayerError(f"failed to pause domain {uuid}: {exc}") from exc
+    return _summarize(domain)
+
+
+def resume_domain(uuid: str) -> DomainSummary:
+    """Resume a paused domain. Idempotent: already-running is not an error."""
+    domain = _lookup(uuid)
+    summary = _summarize(domain)
+    if summary.state in _PAUSABLE_STATES:
+        return summary
+    if summary.state != DomainState.PAUSED:
+        raise InvalidDomainStateError(uuid, summary.state, "resume")
+    try:
+        domain.resume()
+    except libvirt.libvirtError as exc:
+        raise LibvirtLayerError(f"failed to resume domain {uuid}: {exc}") from exc
     return _summarize(domain)
 
 
