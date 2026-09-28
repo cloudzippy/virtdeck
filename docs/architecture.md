@@ -12,7 +12,7 @@ frontend (React/Vite)  --HTTP/JSON-->  backend/app/api  -->  backend/app/service
 - **`api/`** — FastAPI routers. Request/response validation only; no business logic, no libvirt calls.
 - **`services/`** — business logic, authorization decisions, and audit logging. Calls into `libvirt/` for VM state and `models/` for persistence.
 - **`libvirt/`** — the only place `import libvirt` is allowed. `connection.py` owns the single shared connection; `domains.py` wraps domain (VM) operations and translates `libvirt.libvirtError` into typed exceptions (`libvirt/exceptions.py`).
-- **`models/`** — SQLAlchemy ORM models for data VirtDeck itself owns (users, audit log). VM state itself is *not* duplicated in the database — it's read live from libvirt on each request.
+- **`models/`** — SQLAlchemy ORM models for data VirtDeck itself owns. Today that is users and the audit log; planned additions are VM ownership, the VM spec VirtDeck created a domain from, tasks, images, and hosts (see [roadmap.md](roadmap.md)). Runtime state (running, paused, shut off, and so on) is *not* stored in the database — libvirt is the source of truth for it, and it's read live on each request.
 
 Blocking libvirt calls are run off the event loop via `asyncio.to_thread` in the service layer (see `services/vm_service.py`), so FastAPI's async handlers never block on them.
 
