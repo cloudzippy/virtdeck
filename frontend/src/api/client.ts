@@ -77,6 +77,14 @@ export async function rebootVM(uuid: string): Promise<VMSummary> {
   return request<VMSummary>(`/vms/${uuid}/reboot`, { method: "POST" });
 }
 
+export async function pauseVM(uuid: string): Promise<VMSummary> {
+  return request<VMSummary>(`/vms/${uuid}/pause`, { method: "POST" });
+}
+
+export async function resumeVM(uuid: string): Promise<VMSummary> {
+  return request<VMSummary>(`/vms/${uuid}/resume`, { method: "POST" });
+}
+
 export async function deleteVM(uuid: string): Promise<void> {
   return request<void>(`/vms/${uuid}`, { method: "DELETE" });
 }
