@@ -29,4 +29,6 @@ npm install
 npm run dev
 ```
 
-Docs live in [docs/](docs/), starting with [docs/architecture.md](docs/architecture.md).
+Docs live in [docs/](docs/), starting with [docs/architecture.md](docs/architecture.md). The
+reasoning behind the stack is in [docs/stack.md](docs/stack.md), and planned work is in
+[docs/roadmap.md](docs/roadmap.md).

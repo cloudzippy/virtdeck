@@ -188,4 +188,6 @@ A change is complete when:
 
 - API reference: run the backend and open `/docs` (Swagger UI)
 - Architecture notes: `docs/architecture.md`
+- Stack rationale and rejected alternatives: `docs/stack.md`
+- Planned work, in order: `docs/roadmap.md`
 - libvirt reference: https://libvirt.org/docs.html
